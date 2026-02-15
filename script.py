@@ -39,17 +39,6 @@ def gee_baglan():
             return False
 
 
-# Bağlantıyı çalıştır
-if gee_baglan():
-    st.success("Google Earth Engine Başarıyla Bağlandı!")
-
-    # --- HARİTA GÖSTERİMİ ---
-    m = geemap.Map(center=[39, 35], zoom=6)
-    # Haritayı ekrana bas
-    st_folium(m, width=700, height=500)
-# --- 1. SETTINGS & CSS ---
-st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
-
 st.markdown("""
     <style>
     .stMetric { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 10px; }
