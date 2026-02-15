@@ -12,25 +12,29 @@ import json
 # --- GOOGLE EARTH ENGINE BAĞLANTISI ---
 if "EARTHENGINE_TOKEN" in st.secrets:
     try:
-        # Secrets'tan metni al
-        raw_token = st.secrets["EARTHENGINE_TOKEN"]
-        token_info = json.loads(raw_token)
+        # Secrets'tan JSON metnini al
+        token_info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-        # Giriş bilgilerini hazırla
-        # Burada 'client_email' yerine None veriyoruz çünkü biletin içinde zaten yetki var
-        creds = ee.oauth.OAuth2Credentials(
-            token_info['client_id'],
-            token_info['client_secret'],
-            token_info['refresh_token'],
-            'https://oauth2.googleapis.com/token',
-            ['https://www.googleapis.com/auth/earthengine']
+        # En güncel bağlantı yöntemi (Authorized User için)
+        from google.oauth2.credentials import Credentials
+
+        creds = Credentials(
+            token=None,  # Başlangıçta boş bırakıyoruz, yenileme biletini kullanacak
+            refresh_token=token_info['refresh_token'],
+            client_id=token_info['client_id'],
+            client_secret=token_info['client_secret'],
+            token_uri='https://oauth2.googleapis.com/token'
         )
+
         ee.Initialize(creds)
     except Exception as e:
         st.error(f"Bağlantı Kurulamadı: {e}")
 else:
-    # Lokal bilgisayarda çalışırken
-    ee.Initialize()
+    # Lokal bilgisayarda çalışırken (Pycharm içi)
+    try:
+        ee.Initialize()
+    except Exception:
+        st.warning("Earth Engine başlatılamadı. Lütfen giriş yapın.")
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
