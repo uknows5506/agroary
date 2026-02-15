@@ -8,33 +8,34 @@ from streamlit_folium import st_folium
 import streamlit as st
 import ee
 import json
+from google.oauth2.credentials import Credentials
 
 # --- GOOGLE EARTH ENGINE BAĞLANTISI ---
 if "EARTHENGINE_TOKEN" in st.secrets:
     try:
-        # Secrets'tan JSON metnini al
         token_info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-        # En güncel bağlantı yöntemi (Authorized User için)
-        from google.oauth2.credentials import Credentials
+        # Google'ın varsayılan Earth Engine istemci bilgileri
+        # Bu bilgiler her kullanıcı için aynıdır, biletinle eşleşmeyi sağlar.
+        GEE_CLIENT_ID = "517222506229-vlsocvtdS6j7ka93u578u.apps.googleusercontent.com"
+        GEE_CLIENT_SECRET = "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3u578u"
 
         creds = Credentials(
-            token=None,  # Başlangıçta boş bırakıyoruz, yenileme biletini kullanacak
+            token=None,
             refresh_token=token_info['refresh_token'],
-            client_id=token_info['client_id'],
-            client_secret=token_info['client_secret'],
+            client_id=GEE_CLIENT_ID,
+            client_secret=GEE_CLIENT_SECRET,
             token_uri='https://oauth2.googleapis.com/token'
         )
 
-        ee.Initialize(creds)
+        # Proje ID'sini de ekleyerek başlatıyoruz
+        ee.Initialize(creds, project=token_info.get('project', 'environmental-analysis-482013'))
+
     except Exception as e:
         st.error(f"Bağlantı Kurulamadı: {e}")
 else:
-    # Lokal bilgisayarda çalışırken (Pycharm içi)
-    try:
-        ee.Initialize()
-    except Exception:
-        st.warning("Earth Engine başlatılamadı. Lütfen giriş yapın.")
+    # Lokal bilgisayarda çalışırken
+    ee.Initialize()
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
