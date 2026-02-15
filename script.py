@@ -280,11 +280,7 @@ if map_output and map_output.get("last_active_drawing"):
     # Kullanıcı bir kare/poligon çizdiği anda bu blok çalışır
     roi = ee.Geometry.Polygon(map_output["last_active_drawing"]["geometry"]["coordinates"])
 
-# 4. ANALİZ BAŞLIYOR: Eğer bir bölge çizildiyse analiz kodlarını çalıştır
-if roi:
-    # --- BURADAN SONRA SENİN MEVCUT ANALİZ KODLARIN (TAB'LAR, SATELLITE İŞLEMLERİ) DEVAM EDECEK ---
-    st.success("✅ Tarla Tespit Edildi! Analiz Başlatılıyor...")
-# --- BURADA BİTİR ---
+
 if roi:
     # 🛠️ PRECISION FIX: -5m Buffer
     roi_veg = roi.buffer(-5)
