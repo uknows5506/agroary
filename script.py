@@ -8,33 +8,22 @@ from streamlit_folium import st_folium
 import streamlit as st
 import ee
 import json
-from google.oauth2.credentials import Credentials
 
-# --- GOOGLE EARTH ENGINE BAĞLANTISI ---
+# --- SERVİS HESABI BAĞLANTISI ---
 if "EARTHENGINE_TOKEN" in st.secrets:
     try:
-        token_info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+        # Secrets'tan JSON verisini alıyoruz
+        info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-        # Google'ın varsayılan Earth Engine istemci bilgileri
-        # Bu bilgiler her kullanıcı için aynıdır, biletinle eşleşmeyi sağlar.
-        GEE_CLIENT_ID = "517222506229-vlsocvtdS6j7ka93u578u.apps.googleusercontent.com"
-        GEE_CLIENT_SECRET = "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3u578u"
+        # Servis hesabı anahtarıyla giriş yapıyoruz
+        creds = ee.ServiceAccountCredentials(info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"])
 
-        creds = Credentials(
-            token=None,
-            refresh_token=token_info['refresh_token'],
-            client_id=GEE_CLIENT_ID,
-            client_secret=GEE_CLIENT_SECRET,
-            token_uri='https://oauth2.googleapis.com/token'
-        )
-
-        # Proje ID'sini de ekleyerek başlatıyoruz
-        ee.Initialize(creds, project=token_info.get('project', 'environmental-analysis-482013'))
-
+        # Google Earth Engine'ı projenle birlikte başlatıyoruz
+        ee.Initialize(creds, project='environmental-analysis-482013')
     except Exception as e:
-        st.error(f"Bağlantı Kurulamadı: {e}")
+        st.error(f"Maalesef bağlantı kurulamadı: {e}")
 else:
-    # Lokal bilgisayarda çalışırken
+    # Kendi bilgisayarında çalıştırırken
     ee.Initialize()
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
