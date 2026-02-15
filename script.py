@@ -7,24 +7,41 @@ import altair as alt
 from streamlit_folium import st_folium
 import streamlit as st
 import ee
+import streamlit as st
+import ee
 import json
 
-# --- SERVİS HESABI BAĞLANTISI ---
-if "EARTHENGINE_TOKEN" in st.secrets:
-    try:
-        # Secrets'tan JSON verisini alıyoruz
-        info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-        # Servis hesabı anahtarıyla giriş yapıyoruz
-        creds = ee.ServiceAccountCredentials(info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"])
+# --- GOOGLE EARTH ENGINE BAĞLANTISI (SERVİS HESABI) ---
+def initialize_ee():
+    if "EARTHENGINE_TOKEN" in st.secrets:
+        try:
+            # Secrets'tan JSON anahtarını alıyoruz
+            info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-        # Google Earth Engine'ı projenle birlikte başlatıyoruz
-        ee.Initialize(creds, project='environmental-analysis-482013')
-    except Exception as e:
-        st.error(f"Maalesef bağlantı kurulamadı: {e}")
-else:
-    # Kendi bilgisayarında çalıştırırken
-    ee.Initialize()
+            # Servis hesabı kimlik bilgilerini oluşturuyoruz
+            creds = ee.ServiceAccountCredentials(info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"])
+
+            # Proje ID'si ile başlatıyoruz (Hata almamak için proje ID şart)
+            ee.Initialize(creds, project='environmental-analysis-482013')
+            return True
+        except Exception as e:
+            st.error(f"Bağlantı Hatası: {e}")
+            return False
+    else:
+        # Kendi bilgisayarında çalışırken (PyCharm içi)
+        try:
+            ee.Initialize()
+            return True
+        except Exception:
+            st.warning("Lütfen Streamlit Cloud üzerinden Secrets ayarlarını kontrol edin.")
+            return False
+
+
+# Bağlantıyı başlat
+if initialize_ee():
+    st.success("Google Earth Engine Bağlantısı Başarılı!")
+    # Buradan sonra harita ve analiz kodların devam edebilir
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
@@ -45,7 +62,6 @@ st.markdown("""
 try:
     ee.Initialize()
 except Exception as e:
-    ee.Authenticate()
     ee.Initialize()
 
 # --- 3. KNOWLEDGE BASE (NBS - ENGLISH) ---
