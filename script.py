@@ -7,6 +7,7 @@ import altair as alt
 from streamlit_folium import st_folium
 import json
 
+st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
 # --- KESİN ÇÖZÜM BAĞLANTI BLOĞU ---
 def gee_baglan():
@@ -61,12 +62,6 @@ st.markdown("""
     iframe { width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
-
-# --- 2. INITIALIZE GEE ---
-try:
-    ee.Initialize()
-except Exception as e:
-    ee.Initialize()
 
 # --- 3. KNOWLEDGE BASE (NBS - ENGLISH) ---
 ANALYSIS_CONFIG = {
@@ -277,19 +272,30 @@ with st.sidebar:
                                 ["Natural Color", "NDVI", "GDNVI", "SI", "SAVI", "NDWI", "BSI", "MSI", "Slope"])
     st.info("👇 **Instruction:** Draw a polygon on the map to start.")
 
+# --- BURADAN BAŞLA ---
 st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
-# MAP
+# 1. Haritayı oluşturuyoruz
 m = geemap.Map(center=[39.0, 35.0], zoom=6)
 m.add_basemap("HYBRID")
 m.add_basemap("ROADMAP")
 m.add_layer_control()
-map_output = st_folium(m, height=500, width=None)
 
+# 2. Haritayı ekrana çizdiriyoruz ve kullanıcının çizim yapmasını bekliyoruz
+# 'map_output' değişkeni, kullanıcının haritaya çizdiği koordinatları yakalar.
+map_output = st_folium(m, height=500, width=None, key="farmer_map")
+
+# 3. Çizilen bölgeyi (ROI) tespit ediyoruz
 roi = None
 if map_output and map_output.get("last_active_drawing"):
+    # Kullanıcı bir kare/poligon çizdiği anda bu blok çalışır
     roi = ee.Geometry.Polygon(map_output["last_active_drawing"]["geometry"]["coordinates"])
 
+# 4. ANALİZ BAŞLIYOR: Eğer bir bölge çizildiyse analiz kodlarını çalıştır
+if roi:
+    # --- BURADAN SONRA SENİN MEVCUT ANALİZ KODLARIN (TAB'LAR, SATELLITE İŞLEMLERİ) DEVAM EDECEK ---
+    st.success("✅ Tarla Tespit Edildi! Analiz Başlatılıyor...")
+# --- BURADA BİTİR ---
 if roi:
     # 🛠️ PRECISION FIX: -5m Buffer
     roi_veg = roi.buffer(-5)
