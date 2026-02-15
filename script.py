@@ -306,7 +306,10 @@ if roi:
         slope_val = t_stats.get('slope', 0)
         aspect_val = t_stats.get('aspect', 0)
         elevation_val = t_stats.get('elevation', 0)
-        compass = get_compass_direction(aspect_val)
+        if aspect_val is not None:
+            compass = get_compass_direction(aspect_val)
+        else:
+            compass = "Not Calculated"  # Veri gelmezse hata vermemesi için
 
         if s2_col.size().getInfo() > 0:
             # --- IMAGE PROCESSING ---
