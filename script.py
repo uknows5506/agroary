@@ -5,7 +5,19 @@ import datetime
 import pandas as pd
 import altair as alt
 from streamlit_folium import st_folium
+import streamlit as st
+import ee
+import json
 
+# --- GEE KİMLİK DOĞRULAMA ---
+if "EARTHENGINE_TOKEN" in st.secrets:
+    # Buluttaki anahtarı kullan
+    token_info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+    # Not: Proje adını da eklemek gerekebilir
+    ee.Initialize(ee.ServiceAccountCredentials(token_info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"]))
+else:
+    # Lokal bilgisayardaki anahtarı kullan
+    ee.Initialize()
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
