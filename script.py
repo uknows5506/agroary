@@ -5,43 +5,47 @@ import datetime
 import pandas as pd
 import altair as alt
 from streamlit_folium import st_folium
-import streamlit as st
-import ee
-import streamlit as st
-import ee
 import json
 
 
-# --- GOOGLE EARTH ENGINE BAĞLANTISI (SERVİS HESABI) ---
-def initialize_ee():
+# --- KESİN ÇÖZÜM BAĞLANTI BLOĞU ---
+def gee_baglan():
+    # Streamlit üzerindeki Secrets'ı kontrol et
     if "EARTHENGINE_TOKEN" in st.secrets:
         try:
-            # Secrets'tan JSON anahtarını alıyoruz
-            info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+            # Secrets'tan gelen veriyi JSON olarak işle
+            anahtar_verisi = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-            # Servis hesabı kimlik bilgilerini oluşturuyoruz
-            creds = ee.ServiceAccountCredentials(info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"])
+            # Servis hesabı bilgilerini hazırla
+            kimlik = ee.ServiceAccountCredentials(
+                anahtar_verisi['client_email'],
+                key_data=st.secrets["EARTHENGINE_TOKEN"]
+            )
 
-            # Proje ID'si ile başlatıyoruz (Hata almamak için proje ID şart)
-            ee.Initialize(creds, project='environmental-analysis-482013')
+            # Proje ID'si ile GEE'yi başlat (En önemli kısım burası!)
+            ee.Initialize(kimlik, project='environmental-analysis-482013')
             return True
         except Exception as e:
             st.error(f"Bağlantı Hatası: {e}")
             return False
     else:
-        # Kendi bilgisayarında çalışırken (PyCharm içi)
+        # Eğer lokalde çalışıyorsan (PyCharm içi)
         try:
             ee.Initialize()
             return True
-        except Exception:
-            st.warning("Lütfen Streamlit Cloud üzerinden Secrets ayarlarını kontrol edin.")
+        except:
+            st.error("Lütfen Streamlit Secrets ayarlarını yapın!")
             return False
 
 
-# Bağlantıyı başlat
-if initialize_ee():
-    st.success("Google Earth Engine Bağlantısı Başarılı!")
-    # Buradan sonra harita ve analiz kodların devam edebilir
+# Bağlantıyı çalıştır
+if gee_baglan():
+    st.success("Google Earth Engine Başarıyla Bağlandı!")
+
+    # --- HARİTA GÖSTERİMİ ---
+    m = geemap.Map(center=[39, 35], zoom=6)
+    # Haritayı ekrana bas
+    st_folium(m, width=700, height=500)
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
 
