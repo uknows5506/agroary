@@ -9,14 +9,27 @@ import streamlit as st
 import ee
 import json
 
-# --- GEE KİMLİK DOĞRULAMA ---
+# --- GOOGLE EARTH ENGINE BAĞLANTISI ---
 if "EARTHENGINE_TOKEN" in st.secrets:
-    # Buluttaki anahtarı kullan
-    token_info = json.loads(st.secrets["EARTHENGINE_TOKEN"])
-    # Not: Proje adını da eklemek gerekebilir
-    ee.Initialize(ee.ServiceAccountCredentials(token_info['client_email'], key_data=st.secrets["EARTHENGINE_TOKEN"]))
+    try:
+        # Secrets'tan metni al
+        raw_token = st.secrets["EARTHENGINE_TOKEN"]
+        token_info = json.loads(raw_token)
+
+        # Giriş bilgilerini hazırla
+        # Burada 'client_email' yerine None veriyoruz çünkü biletin içinde zaten yetki var
+        creds = ee.oauth.OAuth2Credentials(
+            token_info['client_id'],
+            token_info['client_secret'],
+            token_info['refresh_token'],
+            'https://oauth2.googleapis.com/token',
+            ['https://www.googleapis.com/auth/earthengine']
+        )
+        ee.Initialize(creds)
+    except Exception as e:
+        st.error(f"Bağlantı Kurulamadı: {e}")
 else:
-    # Lokal bilgisayardaki anahtarı kullan
+    # Lokal bilgisayarda çalışırken
     ee.Initialize()
 # --- 1. SETTINGS & CSS ---
 st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="🚜")
