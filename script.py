@@ -262,9 +262,13 @@ with st.sidebar:
                                 ["Natural Color", "NDVI", "GDNVI", "SI", "SAVI", "NDWI", "BSI", "MSI", "Slope"])
     st.info("👇 **Instruction:** Draw a polygon on the map to start.")
 
+# --- BURADAN BAŞLA ---
+st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
+# 1. Haritayı oluşturuyoruz
+# --- CONNECTION SETUP ---
 def connect_gee():
-    """Bağlantıyı her seferinde güvenli şekilde tazeler."""
+    """Establishes a secure connection to Google Earth Engine."""
     if "EARTHENGINE_TOKEN" in st.secrets:
         try:
             key_data = json.loads(st.secrets["EARTHENGINE_TOKEN"])
@@ -272,54 +276,73 @@ def connect_gee():
                 key_data['client_email'],
                 key_data=st.secrets["EARTHENGINE_TOKEN"]
             )
+            # Fix for 'not initialized' errors during analysis
+            ee.data.setDefaultWorkloadTag('farmer-insight-app')
             ee.Initialize(credentials, project='environmental-analysis-482013')
             return True
         except Exception as e:
             st.error(f"Connection Failed: {e}")
             return False
-    return False
+    else:
+        try:
+            ee.Initialize()
+            return True
+        except:
+            st.error("Please configure Streamlit Secrets for cloud deployment!")
+            return False
 
 
-# 2. DEĞİŞKENLERİ BAŞTA TANIMLA (NameError Çözümü)
-roi = None
-roi_veg = None
-
-# 3. UYGULAMA BAŞLANGICI
+# --- MAIN INTERFACE AND ANALYSIS ---
+# --- MAIN INTERFACE AND ANALYSIS START ---
 if connect_gee():
     st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
-    # Haritayı oluştur (Ablanın hatası için ee_initialize=False)
+    # 1. HARİTAYI OLUŞTUR VE TÜM KATMANLARI EKLE (Sağ üstteki menü burası)
     m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
     m.add_basemap("HYBRID")
-    m.add_layer_control()
+    m.add_basemap("ROADMAP")  # Street Map katmanını geri getirir
+    m.add_layer_control()  # Sağ üstteki seçim kutusunu aktif eder
 
     # Haritayı ekrana bas
     map_output = st_folium(m, height=500, width=None, key="farmer_map")
 
-    # Çizim algılandığında çalışacak ana blok
+    # Değişkenleri hata vermemesi için boş olarak tanımlıyoruz (NameError Çözümü)
+    roi = None
+    roi_veg = None
+    s2_col = None
+
     if map_output and map_output.get("last_active_drawing"):
         try:
-            # Bağlantıyı poligon oluşturmadan hemen önce tazele (AttributeError Çözümü)
+            # Bağlantıyı tazele
             connect_gee()
 
-            # Koordinatları al ve Poligonu oluştur
+            # Poligonu oluştur
             coords = map_output["last_active_drawing"]["geometry"]["coordinates"]
             roi = ee.Geometry.Polygon(coords)
-
-            # Hassas analiz alanı (-5m buffer)
-            roi_veg = roi.buffer(-5)
+            roi_veg = roi.buffer(-5)  # Hassas analiz alanı
 
             st.success("✅ Field Successfully Identified! Precision Mode Active...")
 
             with st.spinner('🚀 Calculating Advanced Analytics...'):
-                # --- BURADAN SONRASI SENİN ANALİZ KODLARIN (NDVI, SLOPE VB.) ---
-                # stats = image.reduceRegion(geometry=roi_veg, ...)
-                # gibi devam eden tüm kodlarını buraya yapıştırabilirsin.
+                # 2. HATA VEREN KOLEKSİYONU BURADA TANIMLIYORUZ (NameError: s2_col Çözümü)
+                s2_col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
+                    .filterBounds(roi_veg) \
+                    .filterDate(str(start_date), str(end_date)) \
+                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', cloud_tolerance))
+
+                # Analiz kodlarının geri kalanı (if s2_col.size().getInfo() > 0: ...)
+                # bu spinner bloğunun içinde devam etmeli.
                 pass
 
         except Exception as e:
-            st.error(f"An error occurred during analysis: {e}")
-            st.info("Tip: Please clear cache and try drawing again.")
+            st.error(f"An error occurred: {e}")
+            st.info("Tip: Please clear cache and redraw the field.")
+        # 1. SATELLITE
+        s2_col = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                  .filterBounds(roi_veg).filterDate(str(start_date), str(end_date))
+                  .filter(ee.Filter.lt('CLOUDY_PIXEL_OVER_LAND_PERCENTAGE', cloud_perc))
+                  .map(mask_clouds).map(calculate_indices))
+
         # 2. TERRAIN
         srtm = ee.Image('USGS/SRTMGL1_003').clip(roi)
         terrain = ee.Algorithms.Terrain(srtm)
