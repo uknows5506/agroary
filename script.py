@@ -298,296 +298,80 @@ if connect_gee():
     st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
     # 1. HARİTAYI OLUŞTUR VE TÜM KATMANLARI EKLE (Sağ üstteki menü burası)
+    # Mevcut m = geemap.Map satırını şununla değiştir:
     m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
     m.add_basemap("HYBRID")
-    m.add_basemap("ROADMAP")  # Street Map katmanını geri getirir
-    m.add_layer_control()  # Sağ üstteki seçim kutusunu aktif eder
+    m.add_basemap("ROADMAP")  # Sokak haritası katmanı
+    m.add_layer_control()  # Sağ üstteki menü
 
     # Haritayı ekrana bas
     map_output = st_folium(m, height=500, width=None, key="farmer_map")
 
-    # Değişkenleri hata vermemesi için boş olarak tanımlıyoruz (NameError Çözümü)
-    roi = None
-    roi_veg = None
-    s2_col = None
 
     if map_output and map_output.get("last_active_drawing"):
-        try:
-            # Bağlantıyı tazele
-            connect_gee()
 
-            # Poligonu oluştur
+        roi = None
+        roi_veg = None
+        s2_col = None
+        try:
+            # Poligonu oluştur ve tampon bölgeyi (-5m) ayarla
             coords = map_output["last_active_drawing"]["geometry"]["coordinates"]
             roi = ee.Geometry.Polygon(coords)
-            roi_veg = roi.buffer(-5)  # Hassas analiz alanı
+            roi_veg = roi.buffer(-5)
 
-            st.success("✅ Field Successfully Identified! Precision Mode Active...")
+            st.success("✅ Alan Tanımlandı! Analizler hesaplanıyor...")
 
-            with st.spinner('🚀 Calculating Advanced Analytics...'):
-                # 2. HATA VEREN KOLEKSİYONU BURADA TANIMLIYORUZ (NameError: s2_col Çözümü)
-                s2_col = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED") \
-                    .filterBounds(roi_veg) \
-                    .filterDate(str(start_date), str(end_date)) \
-                    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', cloud_tolerance))
+            with st.spinner('🚀 Uydu verileri ve iklim raporu hazırlanıyor...'):
+                # --- 1. SATELLITE DATA ---
+                s2_col = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                          .filterBounds(roi_veg)
+                          .filterDate(str(start_date), str(end_date))
+                          .filter(ee.Filter.lt('CLOUDY_PIXEL_OVER_LAND_PERCENTAGE', cloud_perc))
+                          .map(mask_clouds)
+                          .map(calculate_indices))
 
-                # Analiz kodlarının geri kalanı (if s2_col.size().getInfo() > 0: ...)
-                # bu spinner bloğunun içinde devam etmeli.
-                pass
+                # --- 2. TERRAIN ANALYSIS ---
+                srtm = ee.Image('USGS/SRTMGL1_003').clip(roi)
+                terrain = ee.Algorithms.Terrain(srtm)
+                t_stats = terrain.reduceRegion(reducer=ee.Reducer.mean(), geometry=roi, scale=30,
+                                               bestEffort=True).getInfo()
+
+                slope_val = t_stats.get('slope', 0)
+                aspect_val = t_stats.get('aspect', 0)
+                elevation_val = t_stats.get('elevation', 0)
+                compass = get_compass_direction(aspect_val) if aspect_val else "Bilinmiyor"
+
+                if s2_col.size().getInfo() > 0:
+                    # --- IMAGE PROCESSING ---
+                    image = s2_col.median().clip(roi_veg)
+                    stats = image.reduceRegion(reducer=ee.Reducer.mean(), geometry=roi_veg, scale=10,
+                                               bestEffort=True).getInfo()
+
+                    # --- TIME SERIES DATA ---
+                    ts_data = get_full_timeseries(s2_col, roi_veg)
+                    ts_list = ts_data.reduceColumns(ee.Reducer.toList(8),
+                                                    ['Date', 'NDVI', 'GDNVI', 'SI', 'SAVI', 'NDWI', 'BSI',
+                                                     'MSI']).values().get(0).getInfo()
+                    df = pd.DataFrame(ts_list, columns=['Date', 'NDVI', 'GDNVI', 'SI', 'SAVI', 'NDWI', 'BSI', 'MSI'])
+                    df['Date'] = pd.to_datetime(df['Date'])
+
+                    # --- TABS VE GÖRSELLEŞTİRME ---
+                    tab1, tab2, tab3, tab4 = st.tabs(
+                        ["📋 NBS Reçeteleri", "🧠 AI Çapraz Analiz", "⛰️ Topoğrafya", "🌦️ İklim Raporu"])
+
+                    # BURADAN SONRA SENİN MEVCUT TAB İÇERİKLERİN (Tab1, Tab2, Tab3, Tab4) GELECEK
+                    # (Hepsini bu if bloğunun içine, yani sağa kaydırarak yapıştır)
+
+                    with tab1:
+                        # Senin tab1 kodların...
+                        pass
+                    # ... Diğer tablar ...
+
+                else:
+                    st.error("❌ Seçilen tarih aralığında temiz uydu görüntüsü bulunamadı.")
 
         except Exception as e:
-            st.error(f"An error occurred: {e}")
-            st.info("Tip: Please clear cache and redraw the field.")
-        # 1. SATELLITE
-        s2_col = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-                  .filterBounds(roi_veg).filterDate(str(start_date), str(end_date))
-                  .filter(ee.Filter.lt('CLOUDY_PIXEL_OVER_LAND_PERCENTAGE', cloud_perc))
-                  .map(mask_clouds).map(calculate_indices))
-
-        # 2. TERRAIN
-        srtm = ee.Image('USGS/SRTMGL1_003').clip(roi)
-        terrain = ee.Algorithms.Terrain(srtm)
-        t_stats = terrain.reduceRegion(reducer=ee.Reducer.mean(), geometry=roi, scale=30, bestEffort=True).getInfo()
-
-        slope_val = t_stats.get('slope', 0)
-        aspect_val = t_stats.get('aspect', 0)
-        elevation_val = t_stats.get('elevation', 0)
-        if aspect_val is not None:
-            compass = get_compass_direction(aspect_val)
+            st.error(f"Bir hata oluştu: {e}")
+            st.info("İpucu: Haritadaki çizimi temizleyip tekrar deneyin.")
         else:
-            compass = "Not Calculated"  # Veri gelmezse hata vermemesi için
-
-        if s2_col.size().getInfo() > 0:
-            # --- IMAGE PROCESSING ---
-            image = s2_col.median().clip(roi_veg)
-            stats = image.reduceRegion(reducer=ee.Reducer.mean(), geometry=roi_veg, scale=10, bestEffort=True).getInfo()
-
-            # --- PRE-CALC CLIMATE ---
-            era = ee.ImageCollection("ECMWF/ERA5_LAND/HOURLY") \
-                .filterDate(str(start_date), str(end_date)) \
-                .select(['total_precipitation_hourly', 'soil_temperature_level_1'])
-
-            climate_roi = roi.centroid(1).buffer(2500)
-
-            # --- TIME SERIES DATA ---
-            ts_data = get_full_timeseries(s2_col, roi_veg)
-            ts_list = ts_data.reduceColumns(ee.Reducer.toList(8),
-                                            ['Date', 'NDVI', 'GDNVI', 'SI', 'SAVI', 'NDWI', 'BSI', 'MSI']).values().get(
-                0).getInfo()
-            df = pd.DataFrame(ts_list, columns=['Date', 'NDVI', 'GDNVI', 'SI', 'SAVI', 'NDWI', 'BSI', 'MSI'])
-            df['Date'] = pd.to_datetime(df['Date'])
-
-            # --- TABS ---
-            tab1, tab2, tab3, tab4 = st.tabs(
-                ["📋 NBS Prescriptions", "🧠 AI Cross-Analysis", "⛰️ Topography", "🌦️ Climate (NBS)"])
-
-            # --- TAB 1: RECIPES ---
-            with tab1:
-                st.markdown("### 🌱 Nature-based Solutions (NBS) Report")
-                for idx in ['NDVI', 'GDNVI', 'SI', 'NDWI', 'SAVI', 'BSI', 'MSI']:
-                    val = stats.get(idx, 0)
-                    name, desc, msg, color = get_status_data(idx, val)
-
-                    st.markdown(
-                        f'<div class="analysis-card"><h4>{name}</h4><p style="color:gray; font-size:0.9em;">{desc}</p>',
-                        unsafe_allow_html=True)
-
-                    c_a, c_b = st.columns([1, 2])
-                    with c_a:
-                        st.metric("Current Value", f"{val:.3f}")
-                        st.markdown(f'<div class="report-box {color}">{msg}</div>', unsafe_allow_html=True)
-                    with c_b:
-                        line_color = {'NDVI': 'green', 'GDNVI': 'magenta', 'SI': 'red', 'NDWI': 'blue', 'SAVI': 'brown',
-                                      'BSI': 'orange', 'MSI': '#795548'}[idx]
-
-                        # FILTERING
-                        chart_df = df[df[idx] != 0]
-                        if idx in ['NDVI', 'GDNVI', 'SAVI']:
-                            chart_df = chart_df[chart_df[idx] > 0.05]
-
-                        chart = alt.Chart(chart_df).mark_line(point=True, color=line_color).encode(
-                            x=alt.X('Date', title='Date'),
-                            y=alt.Y(idx, title=idx, scale=alt.Scale(zero=False, padding=1)),
-                            tooltip=['Date', alt.Tooltip(idx, format='.3f')]
-                        ).properties(height=180)
-                        st.altair_chart(chart, use_container_width=True)
-
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-            # --- TAB 2: CROSS ANALYSIS ---
-            with tab2:
-                col_ai1, col_ai2 = st.columns(2)
-                with col_ai1:
-                    st.markdown("#### ⛰️ Erosion Risk Analysis")
-                    if slope_val > 10 and stats.get('BSI', 0) > 0.15:
-                        st.error(
-                            "🚨 CRITICAL RISK! Steep slope & bare soil.\n\n💡 **NBS:** Urgent! Implement **Contour Farming** and plant Vetiver.",
-                            icon="🚨")
-                    elif slope_val > 5:
-                        st.warning("⚠️ Moderate Risk.\n\n💡 **NBS:** Avoid tillage. Use **Strip Cropping**.", icon="⚠️")
-                    else:
-                        st.success("✅ Stable Terrain (Low Erosion Risk).", icon="✅")
-
-                with col_ai2:
-                    st.markdown("#### ☀️ Micro-Climate & Aspect")
-                    if "South" in compass:
-                        st.warning(
-                            f"🔥 **{compass} Facing:** Hot & Dry.\n\n💡 **NBS:** Plant **Windbreaks** to reduce evaporation.",
-                            icon="🔥")
-                    elif "North" in compass:
-                        st.info(f"❄️ **{compass} Facing:** Cool/Shady.\n\n💡 **NBS:** Good for moisture retention.",
-                                icon="❄️")
-                    else:
-                        st.success(f"✅ **{compass} Facing:** Balanced sunlight exposure.", icon="✅")
-
-                # HIDDEN HUNGER ANALYSIS
-                st.markdown("---")
-                st.markdown("#### 🧪 Nutrient Efficiency (Hidden Hunger)")
-                ndvi_val = stats.get('NDVI', 0)
-                gdnvi_val = stats.get('GDNVI', 0)
-
-                if ndvi_val > 0.5:
-                    if gdnvi_val < 0.35:
-                        st.error(
-                            "📉 **HIDDEN HUNGER DETECTED!**\n\nHigh Biomass (NDVI) but Low Nitrogen (GDNVI).\n💡 **Diagnosis:** Plant is growing but lacks protein. Apply foliar organic fertilizer.",
-                            icon="📉")
-                    elif gdnvi_val < 0.45:
-                        st.warning(
-                            "⚠️ **Mild Deficiency.**\n\nNitrogen is lagging behind growth.\n💡 **Remedy:** Prepare compost tea.",
-                            icon="⚠️")
-                    else:
-                        st.success("✅ **Balanced Nutrition.**\n\nBiomass and Nitrogen levels are synced.", icon="✅")
-                elif ndvi_val < 0.2:
-                    st.info("🍂 **Low Biomass.**\n\nPlants are too small to determine hidden hunger.", icon="🍂")
-                else:
-                    st.success("⚖️ **Status OK.**\n\nStandard growth observed.", icon="⚖️")
-
-            # --- TAB 3: TOPOGRAPHY ---
-            with tab3:
-                st.markdown("### ⛰️ Field Topography")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Elevation", f"{elevation_val:.0f} m")
-                c2.metric("Slope", f"{slope_val:.2f}°")
-                c3.metric("Aspect", f"{compass} ({aspect_val:.0f}°)")
-
-                st.info(f"ℹ️ **Note:** Field faces **{compass}**. Slope is {slope_val:.1f} degrees.")
-
-            # --- TAB 4: CLIMATE REPORT ---
-            with tab4:
-                st.markdown("### 🌦️ Climate Analysis (Monthly Averages)")
-
-
-                # NBS Functions
-                def get_rain_status(total_mm):
-                    if total_mm < 300:
-                        return "🛑 Arid / Water Scarcity.", "danger", "💡 <b>NBS REMEDY:</b> Critical! Implement <b>Rainwater Harvesting</b> ponds."
-                    elif total_mm < 500:
-                        return "⚠️ Semi-Arid.", "warning", "💡 <b>NBS REMEDY:</b> Use <b>Agroforestry</b> to create micro-climates."
-                    elif total_mm < 800:
-                        return "✅ Optimal Rain.", "success", "💡 <b>NBS REMEDY:</b> Focus on <b>Soil Sponge</b> building (compost/mulch)."
-                    else:
-                        return "💧 High Rainfall.", "success", "💡 <b>NBS REMEDY:</b> Manage runoff with <b>Buffer Strips</b>."
-
-                def get_temp_status(avg_c):
-                    if avg_c < 12:
-                        return "❄️ Cold Soil.", "blue-box", "💡 <b>NBS REMEDY:</b> Use Passive Solar heating (Greenhouses)."
-                    elif avg_c < 25:
-                        return "✅ Optimal Temp.", "success", "💡 <b>NBS REMEDY:</b> Maintain biodiversity for pollinators."
-                    else:
-                        return "🔥 Heat Stress.", "danger", "💡 <b>NBS REMEDY:</b> Use <b>Shade Trees</b> or Silvopasture."
-
-
-                try:
-                    climate_roi = roi.centroid(1).buffer(5000)
-                    raw_era = ee.ImageCollection("ECMWF/ERA5_LAND/HOURLY") \
-                        .filterBounds(climate_roi) \
-                        .filterDate(str(start_date), str(end_date)) \
-                        .select(['total_precipitation_hourly', 'soil_temperature_level_1'])
-
-                    if raw_era.size().getInfo() > 0:
-                        def extract_clim(img):
-                            stats = img.reduceRegion(reducer=ee.Reducer.mean(), geometry=climate_roi, scale=11132,
-                                                     bestEffort=True)
-                            t = stats.get('soil_temperature_level_1')
-                            r = stats.get('total_precipitation_hourly')
-                            t_safe = ee.Algorithms.If(t, ee.Number(t).subtract(273.15), -999)
-                            r_safe = ee.Algorithms.If(r, ee.Number(r).multiply(1000), -999)
-                            return ee.Feature(None,
-                                              {'Date': ee.Date(img.get('system:time_start')).format('YYYY-MM-dd HH:mm'),
-                                               'Temp': t_safe, 'Rain': r_safe})
-
-
-                        clim_list = raw_era.limit(10000).map(extract_clim).reduceColumns(ee.Reducer.toList(3),
-                                                                                         ['Date', 'Temp',
-                                                                                          'Rain']).values().get(
-                            0).getInfo()
-
-                        if clim_list:
-                            cdf = pd.DataFrame(clim_list, columns=['Date', 'Temp', 'Rain'])
-                            cdf['Date'] = pd.to_datetime(cdf['Date'])
-                            cdf = cdf[cdf['Temp'] != -999]
-                            cdf = cdf[cdf['Rain'] >= 0]
-
-                            if cdf.empty:
-                                st.warning("⚠️ Valid data not found after filtering.")
-                            else:
-                                cdf = cdf.set_index('Date')
-                                monthly_df = cdf.resample('M').agg({'Temp': 'mean', 'Rain': 'sum'}).reset_index()
-
-                                avg_temp_season = monthly_df['Temp'].mean()
-                                total_rain_season = monthly_df['Rain'].sum()
-
-                                col_temp, col_rain = st.columns(2)
-
-                                # TEMP
-                                with col_temp:
-                                    st.markdown("#### 🌡️ Monthly Temperature")
-                                    st.metric("Avg Soil Temp", f"{avg_temp_season:.1f} °C")
-                                    t_msg, t_col, t_rec = get_temp_status(avg_temp_season)
-                                    box_style = "background-color: #e3f2fd; border: 1px solid #2196f3;" if t_col == "blue-box" else ""
-                                    if t_col == "success": box_style = "background-color: #e8f5e9; border: 1px solid #2e7d32;"
-                                    if t_col == "warning": box_style = "background-color: #fff3e0; border: 1px solid #ef6c00;"
-                                    if t_col == "danger": box_style = "background-color: #ffebee; border: 1px solid #c62828;"
-
-                                    st.markdown(
-                                        f'<div style="{box_style} padding: 15px; border-radius: 8px; margin-bottom: 10px;"><b>{t_msg}</b><br>{t_rec}</div>',
-                                        unsafe_allow_html=True)
-
-                                    chart_t = alt.Chart(monthly_df).mark_line(color='#d32f2f', point=True).encode(
-                                        x=alt.X('Date', title='Month', axis=alt.Axis(format='%b %Y')),
-                                        y=alt.Y('Temp', title='Avg Temp (°C)'),
-                                        tooltip=[alt.Tooltip('Date', format='%B %Y'), 'Temp']
-                                    ).properties(height=250)
-                                    st.altair_chart(chart_t, use_container_width=True)
-
-                                # RAIN
-                                with col_rain:
-                                    st.markdown("#### 🌧️ Monthly Precipitation")
-                                    st.metric("Total Rainfall", f"{total_rain_season:.1f} mm")
-                                    r_msg, r_col, r_rec = get_rain_status(total_rain_season)
-                                    r_style = ""
-                                    if r_col == "success": r_style = "background-color: #e8f5e9; border: 1px solid #2e7d32;"
-                                    if r_col == "warning": r_style = "background-color: #fff3e0; border: 1px solid #ef6c00;"
-                                    if r_col == "danger": r_style = "background-color: #ffebee; border: 1px solid #c62828;"
-
-                                    st.markdown(
-                                        f'<div style="{r_style} padding: 15px; border-radius: 8px; margin-bottom: 10px;"><b>{r_msg}</b><br>{r_rec}</div>',
-                                        unsafe_allow_html=True)
-
-                                    chart_r = alt.Chart(monthly_df).mark_bar(color='#1976d2', opacity=0.7).encode(
-                                        x=alt.X('Date', title='Month', axis=alt.Axis(format='%b %Y')),
-                                        y=alt.Y('Rain', title='Total Rain (mm)'),
-                                        tooltip=[alt.Tooltip('Date', format='%B %Y'), 'Rain']
-                                    ).properties(height=250)
-                                    st.altair_chart(chart_r, use_container_width=True)
-
-                        else:
-                            st.warning("⚠️ Data extracted but resulted in empty list.")
-                    else:
-                        st.warning("⚠️ No ERA5 images found.")
-                except Exception as e:
-                    st.error(f"Climate Logic Error: {e}")
-
-        else:
-            st.error("❌ No clear satellite imagery found.")
-else:
-    st.info("👈 Please draw a polygon on the map.")
+            st.info("👈 Analize başlamak için lütfen harita üzerinden tarlayı çizin.")
