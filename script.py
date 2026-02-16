@@ -262,8 +262,6 @@ with st.sidebar:
                                 ["Natural Color", "NDVI", "GDNVI", "SI", "SAVI", "NDWI", "BSI", "MSI", "Slope"])
     st.info("👇 **Instruction:** Draw a polygon on the map to start.")
 
-# --- BURADAN BAŞLA ---
-st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
 # 1. Haritayı oluşturuyoruz
 # --- CONNECTION SETUP ---
