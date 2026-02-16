@@ -294,7 +294,6 @@ def connect_gee():
 
 # --- MAIN INTERFACE AND ANALYSIS ---
 if connect_gee():
-    st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
     # 1. Map Initialization (Fixes the KeyError: 'client_secret')
     # We set ee_initialize=False because we already initialized above.
