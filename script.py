@@ -11,33 +11,34 @@ st.set_page_config(page_title="Farmer Insight Pro", layout="wide", page_icon="�
 
 # --- KESİN ÇÖZÜM BAĞLANTI BLOĞU ---
 def gee_baglan():
-    # Streamlit üzerindeki Secrets'ı kontrol et
     if "EARTHENGINE_TOKEN" in st.secrets:
         try:
-            # Secrets'tan gelen veriyi JSON olarak işle
+            # Secrets'tan anahtarı al
             anahtar_verisi = json.loads(st.secrets["EARTHENGINE_TOKEN"])
 
-            # Servis hesabı bilgilerini hazırla
+            # 1. Burası Önemli: Servis hesabı kimliğini oluştur
             kimlik = ee.ServiceAccountCredentials(
                 anahtar_verisi['client_email'],
                 key_data=st.secrets["EARTHENGINE_TOKEN"]
             )
 
-            # Proje ID'si ile GEE'yi başlat (En önemli kısım burası!)
+            # 2. Burası Önemli:setDefaultWorkloadTag ekleyerek bağlantıyı mühürle
+            ee.data.setDefaultWorkloadTag('farmer-insight-app')
+
+            # 3. Proje ID'si ile başlat
             ee.Initialize(kimlik, project='environmental-analysis-482013')
             return True
         except Exception as e:
             st.error(f"Bağlantı Hatası: {e}")
             return False
     else:
-        # Eğer lokalde çalışıyorsan (PyCharm içi)
+        # Lokal çalışma alanı (PyCharm)
         try:
             ee.Initialize()
             return True
         except:
             st.error("Lütfen Streamlit Secrets ayarlarını yapın!")
             return False
-
 
 st.markdown("""
     <style>
@@ -265,8 +266,7 @@ with st.sidebar:
 st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
 # 1. Haritayı oluşturuyoruz
-m = geemap.Map(center=[39.0, 35.0], zoom=6)
-m.add_basemap("HYBRID")
+m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)m.add_basemap("HYBRID")
 m.add_basemap("ROADMAP")
 m.add_layer_control()
 
