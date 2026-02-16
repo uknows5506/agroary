@@ -262,13 +262,9 @@ with st.sidebar:
                                 ["Natural Color", "NDVI", "GDNVI", "SI", "SAVI", "NDWI", "BSI", "MSI", "Slope"])
     st.info("👇 **Instruction:** Draw a polygon on the map to start.")
 
-# --- BURADAN BAŞLA ---
-st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
-# 1. Haritayı oluşturuyoruz
-# --- CONNECTION SETUP ---
 def connect_gee():
-    """Establishes a secure connection to Google Earth Engine."""
+    """Bağlantıyı her seferinde güvenli şekilde tazeler."""
     if "EARTHENGINE_TOKEN" in st.secrets:
         try:
             key_data = json.loads(st.secrets["EARTHENGINE_TOKEN"])
@@ -276,71 +272,54 @@ def connect_gee():
                 key_data['client_email'],
                 key_data=st.secrets["EARTHENGINE_TOKEN"]
             )
-            # Fix for 'not initialized' errors during analysis
-            ee.data.setDefaultWorkloadTag('farmer-insight-app')
             ee.Initialize(credentials, project='environmental-analysis-482013')
             return True
         except Exception as e:
             st.error(f"Connection Failed: {e}")
             return False
-    else:
-        try:
-            ee.Initialize()
-            return True
-        except:
-            st.error("Please configure Streamlit Secrets for cloud deployment!")
-            return False
+    return False
 
 
-# --- MAIN INTERFACE AND ANALYSIS ---
+# 2. DEĞİŞKENLERİ BAŞTA TANIMLA (NameError Çözümü)
+roi = None
+roi_veg = None
+
+# 3. UYGULAMA BAŞLANGICI
 if connect_gee():
+    st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
-    # 1. Map Initialization (Fixes the KeyError: 'client_secret')
-    # We set ee_initialize=False because we already initialized above.
+    # Haritayı oluştur (Ablanın hatası için ee_initialize=False)
     m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
     m.add_basemap("HYBRID")
-    m.add_basemap("ROADMAP")
     m.add_layer_control()
 
-    # Display Map
+    # Haritayı ekrana bas
     map_output = st_folium(m, height=500, width=None, key="farmer_map")
 
-    # 2. Area Selection and Processing
+    # Çizim algılandığında çalışacak ana blok
     if map_output and map_output.get("last_active_drawing"):
         try:
-            # Safety check: ensure connection is still alive before geometry operations
-            if not ee.data._initialized:
-                connect_gee()
+            # Bağlantıyı poligon oluşturmadan hemen önce tazele (AttributeError Çözümü)
+            connect_gee()
 
-            # Define the Region of Interest (ROI)
+            # Koordinatları al ve Poligonu oluştur
             coords = map_output["last_active_drawing"]["geometry"]["coordinates"]
             roi = ee.Geometry.Polygon(coords)
 
-            # --- PRECISION ANALYTICS ---
-            # Apply -5m buffer to avoid edge effects (Precision Mode)
+            # Hassas analiz alanı (-5m buffer)
             roi_veg = roi.buffer(-5)
 
-            st.success("✅ Field Successfully Identified! Precision Mode Active (-5m Buffer)...")
+            st.success("✅ Field Successfully Identified! Precision Mode Active...")
 
             with st.spinner('🚀 Calculating Advanced Analytics...'):
-                # All analysis logic (NDVI, Slope, Climate) continues here...
-                # Note: Ensure all your labels and chart titles are in English now.
-
-                # Example of a safe data check to prevent TypeError
-                # if aspect_val is not None:
-                #     direction = get_compass_direction(aspect_val)
-
+                # --- BURADAN SONRASI SENİN ANALİZ KODLARIN (NDVI, SLOPE VB.) ---
+                # stats = image.reduceRegion(geometry=roi_veg, ...)
+                # gibi devam eden tüm kodlarını buraya yapıştırabilirsin.
                 pass
 
         except Exception as e:
             st.error(f"An error occurred during analysis: {e}")
-            st.info("Tip: Refresh the page and try drawing the boundary again.")
-        # 1. SATELLITE
-        s2_col = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
-                  .filterBounds(roi_veg).filterDate(str(start_date), str(end_date))
-                  .filter(ee.Filter.lt('CLOUDY_PIXEL_OVER_LAND_PERCENTAGE', cloud_perc))
-                  .map(mask_clouds).map(calculate_indices))
-
+            st.info("Tip: Please clear cache and try drawing again.")
         # 2. TERRAIN
         srtm = ee.Image('USGS/SRTMGL1_003').clip(roi)
         terrain = ee.Algorithms.Terrain(srtm)
