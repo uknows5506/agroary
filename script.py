@@ -266,29 +266,76 @@ with st.sidebar:
 st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
 # 1. Haritayı oluşturuyoruz
-m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
-m.add_basemap("HYBRID")
-m.add_basemap("ROADMAP")
-m.add_layer_control()
+# --- CONNECTION SETUP ---
+def connect_gee():
+    """Establishes a secure connection to Google Earth Engine."""
+    if "EARTHENGINE_TOKEN" in st.secrets:
+        try:
+            key_data = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+            credentials = ee.ServiceAccountCredentials(
+                key_data['client_email'],
+                key_data=st.secrets["EARTHENGINE_TOKEN"]
+            )
+            # Fix for 'not initialized' errors during analysis
+            ee.data.setDefaultWorkloadTag('farmer-insight-app')
+            ee.Initialize(credentials, project='environmental-analysis-482013')
+            return True
+        except Exception as e:
+            st.error(f"Connection Failed: {e}")
+            return False
+    else:
+        try:
+            ee.Initialize()
+            return True
+        except:
+            st.error("Please configure Streamlit Secrets for cloud deployment!")
+            return False
 
-# 2. Haritayı ekrana çizdiriyoruz ve kullanıcının çizim yapmasını bekliyoruz
-# 'map_output' değişkeni, kullanıcının haritaya çizdiği koordinatları yakalar.
-map_output = st_folium(m, height=500, width=None, key="farmer_map")
 
-# 3. Çizilen bölgeyi (ROI) tespit ediyoruz
-roi = None
-if map_output and map_output.get("last_active_drawing"):
-    # Kullanıcı bir kare/poligon çizdiği anda bu blok çalışır
-    roi = ee.Geometry.Polygon(map_output["last_active_drawing"]["geometry"]["coordinates"])
+# --- MAIN INTERFACE AND ANALYSIS ---
+if connect_gee():
+    st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
+    # 1. Map Initialization (Fixes the KeyError: 'client_secret')
+    # We set ee_initialize=False because we already initialized above.
+    m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
+    m.add_basemap("HYBRID")
+    m.add_basemap("ROADMAP")
+    m.add_layer_control()
 
-if roi:
-    # 🛠️ PRECISION FIX: -5m Buffer
-    roi_veg = roi.buffer(-5)
-    st.success("✅ Field Detected! Precision Mode Active (-5m Buffer)...")
+    # Display Map
+    map_output = st_folium(m, height=500, width=None, key="farmer_map")
 
-    with st.spinner('🚀 Calculating Precision Analytics...'):
+    # 2. Area Selection and Processing
+    if map_output and map_output.get("last_active_drawing"):
+        try:
+            # Safety check: ensure connection is still alive before geometry operations
+            if not ee.data._initialized:
+                connect_gee()
 
+            # Define the Region of Interest (ROI)
+            coords = map_output["last_active_drawing"]["geometry"]["coordinates"]
+            roi = ee.Geometry.Polygon(coords)
+
+            # --- PRECISION ANALYTICS ---
+            # Apply -5m buffer to avoid edge effects (Precision Mode)
+            roi_veg = roi.buffer(-5)
+
+            st.success("✅ Field Successfully Identified! Precision Mode Active (-5m Buffer)...")
+
+            with st.spinner('🚀 Calculating Advanced Analytics...'):
+                # All analysis logic (NDVI, Slope, Climate) continues here...
+                # Note: Ensure all your labels and chart titles are in English now.
+
+                # Example of a safe data check to prevent TypeError
+                # if aspect_val is not None:
+                #     direction = get_compass_direction(aspect_val)
+
+                pass
+
+        except Exception as e:
+            st.error(f"An error occurred during analysis: {e}")
+            st.info("Tip: Refresh the page and try drawing the boundary again.")
         # 1. SATELLITE
         s2_col = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
                   .filterBounds(roi_veg).filterDate(str(start_date), str(end_date))
