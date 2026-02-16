@@ -266,7 +266,8 @@ with st.sidebar:
 st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
 
 # 1. Haritayı oluşturuyoruz
-m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)m.add_basemap("HYBRID")
+m = geemap.Map(center=[39.0, 35.0], zoom=6, ee_initialize=False)
+m.add_basemap("HYBRID")
 m.add_basemap("ROADMAP")
 m.add_layer_control()
 
