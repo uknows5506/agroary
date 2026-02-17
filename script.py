@@ -265,29 +265,56 @@ with st.sidebar:
 
 # 1. Haritayı oluşturuyoruz
 # --- CONNECTION SETUP ---
+# --- 2. GEE BAĞLANTI FONKSİYONU (TEK VE KESİN ÇÖZÜM) ---
 def connect_gee():
-    """Establishes a secure connection to Google Earth Engine."""
+    """Google Earth Engine bağlantısını güvenli şekilde kurar."""
+    # 1. Önce Streamlit Secrets kontrol edilir (Bulut için)
     if "EARTHENGINE_TOKEN" in st.secrets:
         try:
-            key_data = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+            # Secrets içindeki JSON metnini sözlüğe çevir
+            secret_dict = json.loads(st.secrets["EARTHENGINE_TOKEN"])
+
+            # Servis hesabı kimlik bilgilerini oluştur
             credentials = ee.ServiceAccountCredentials(
-                key_data['client_email'],
+                secret_dict['client_email'],
                 key_data=st.secrets["EARTHENGINE_TOKEN"]
             )
-            # Fix for 'not initialized' errors during analysis
-            ee.data.setDefaultWorkloadTag('farmer-insight-app')
+
+            # Proje ID'sini Secrets'tan veya manuel al (Seninki: environmental-analysis-482013)
             ee.Initialize(credentials, project='environmental-analysis-482013')
             return True
         except Exception as e:
-            st.error(f"Connection Failed: {e}")
+            st.error(f"Bulut Bağlantı Hatası: {e}")
             return False
+    # 2. Eğer Secrets yoksa lokal girişi dene (Senin bilgisayarın için)
     else:
         try:
             ee.Initialize()
             return True
-        except:
-            st.error("Please configure Streamlit Secrets for cloud deployment!")
+        except Exception:
+            st.warning("GEE Yetkisi Bulunamadı. Lokalde 'earthengine authenticate' yapın veya Secrets ekleyin.")
             return False
+
+
+# --- UYGULAMA BAŞLANGICI ---
+if connect_gee():
+    st.title("🚜 Farmer Insight Pro - Precision Edition 🔬")
+
+    # Haritayı oluştur (ee_initialize=True kalsın, biz zaten yukarıda init yaptık)
+    m = geemap.Map(center=[39.0, 35.0], zoom=6)
+    m.add_basemap("HYBRID")
+    m.add_basemap("ROADMAP")
+    m.add_layer_control()
+
+    map_output = st_folium(m, height=500, width=None, key="farmer_map")
+
+    if map_output and map_output.get("last_active_drawing"):
+        # Çizim verilerini al
+        roi_coords = map_output["last_active_drawing"]["geometry"]["coordinates"]
+        roi = ee.Geometry.Polygon(roi_coords)
+        roi_veg = roi.buffer(-5)
+
+        # Analizlere buradan devam et...
 
 
 # --- MAIN INTERFACE AND ANALYSIS ---
